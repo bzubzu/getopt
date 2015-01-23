@@ -1,0 +1,91 @@
+#!/bin/ksh
+#######################################################################
+# Following function under BSD license.
+#######################################################################
+
+#######################################################################
+# Copyright (c) 1998, Regents of the University of California
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# * Redistributions of source code must retain the above copyright
+#   notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in the
+#   documentation and/or other materials provided with the distribution.
+# * Neither the name of the University of California, Berkeley nor the
+#   names of its contributors may be used to endorse or promote products
+#   derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+########################################################################
+
+########################################################################
+#-- Declare variable
+########################################################################
+
+typeset -A LIST_PARAM_FUNCTION
+typeset value_delimiter_function='=>'
+typeset param_delimiter_function=';'
+
+function call_function
+{
+        typeset function_to_eval="$1 "
+        typeset order_arg=${LIST_PARAM_FUNCTION["$1"]}
+        typeset -A LIST_ARG
+
+        while [ $# -gt 0 ]
+        do
+                shift
+                if [ ! -z "$1" ]
+                then
+                        typeset var_name=$(echo "$1" | sed "s/[ \t]*${value_delimiter_function}.*//g")
+                        typeset var_content=$(echo "$1" | sed "s/^${var_name}[ \t]*${value_delimiter_function}[ \t]*//g")
+                        LIST_ARG+=([${var_name}]=${var_content})
+                fi
+        done
+
+        for item in ${order_arg//${param_delimiter_function}/ }
+        do
+                function_to_eval="${function_to_eval} '${LIST_ARG["$item"]}'"
+        done
+
+        eval ${function_to_eval}
+}
+
+function set_function
+{
+        typeset function=$1
+        typeset arg=$2
+        LIST_PARAM_FUNCTION+=([${function}]=${arg})
+}
+
+function get_function_param
+{
+        typeset order_arg=${LIST_PARAM_FUNCTION[$1]}
+        typeset COUNTER=0
+
+        for item in ${order_arg//${param_delimiter_function}/ }
+        do
+                COUNTER=$((${COUNTER} + 1))
+                echo "typeset $item=\"\$${COUNTER}\""
+        done
+
+
+}
+
+
+#######################################################################
+# End of BSD license.
+#######################################################################
+

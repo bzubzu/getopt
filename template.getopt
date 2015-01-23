@@ -1,0 +1,1180 @@
+#!/bin/ksh
+#######################################################################
+# Following function under BSD license.
+#######################################################################
+
+#######################################################################
+# Copyright (c) 1998, Regents of the University of California
+# All rights reserved.
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+# * Redistributions of source code must retain the above copyright
+#   notice, this list of conditions and the following disclaimer.
+# * Redistributions in binary form must reproduce the above copyright
+#   notice, this list of conditions and the following disclaimer in the
+#   documentation and/or other materials provided with the distribution.
+# * Neither the name of the University of California, Berkeley nor the
+#   names of its contributors may be used to endorse or promote products
+#   derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+# WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE REGENTS AND CONTRIBUTORS BE LIABLE FOR ANY
+# DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+# (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+# ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+########################################################################
+
+########################################################################
+#-- Declare variable
+########################################################################
+
+typeset -A LIST_PARAM
+typeset -A LIST_PARAM_SWITCH_ALT
+typeset -A LIST_PATTERN
+typeset -A LIST_ERROR
+typeset -A LIST_TMP_FILE_GETOPT
+
+function add_tmp_file_to_list
+{
+	TMP_FILE=${1}
+	NUMBER_OF_ITEM=${#LIST_TMP_FILE_GETOPT[*]}
+	LIST_TMP_FILE_GETOPT+=([${NUMBER_OF_ITEM}]="${TMP_FILE}")
+}
+
+function clean_and_quit
+{
+	rm -f ${LIST_TMP_FILE_GETOPT[@]}
+	exit 1
+}
+
+function get_tmp_files
+{
+	echo ${LIST_TMP_FILE_GETOPT[@]}
+}
+
+typeset ERROR_FILE_MT=$(mktemp)
+add_tmp_file_to_list ${ERROR_FILE_MT}
+typeset GLOBAL_PATH=$(pwd)
+typeset GLOBAL_FILE_NAME=$0
+typeset LEN_LINE=20
+typeset ch=' '
+# Column delimliter and Param delimiter must be different and not present in parameters/help
+typeset column_delimiter='ø'
+typeset param_delimiter='µ'
+
+function repeat_item
+{
+	printf "%*s" "$1" | sed "s/ /$2/g"
+}
+
+function br
+{
+	echo "\n $(repeat_item 4 "${column_delimiter} ")"
+}
+
+typeset bold=$(tput bold)
+typeset underline=$(tput smul)
+typeset red=$(tput setaf 1)
+typeset normal=$(tput sgr0)
+
+########################################################################
+#-- Declare variable for man file
+########################################################################
+
+typeset MAN_COMMAND=""
+typeset MAN_FILE=""
+typeset MAN_PROJECT=""
+typeset MAN_DESCRIPTION=""
+typeset MAN_DESCRIPTION_FULL=""
+typeset MAN_COPYRIGHT=""
+typeset MAN_VERSION="1.0"
+
+function set_man_version
+{
+	MAN_VERSION=$1
+}
+
+function set_man_command_name
+{
+	MAN_COMMAND=$1
+}
+
+function set_man_file
+{
+	MAN_FILE=$1
+}
+
+function set_man_project
+{
+	MAN_PROJECT=$1
+}
+
+function set_man_description
+{
+	MAN_DESCRIPTION=$1
+}
+function set_man_description_full
+{
+	MAN_DESCRIPTION_FULL=$1
+}
+
+function set_man_copyright
+{
+	MAN_COPYRIGHT=$1
+}
+
+########################################################################
+#-- Set global variable
+########################################################################
+
+function set_global_variable
+{
+	export $1="$2"
+}
+
+########################################################################
+#-- Create Man page
+########################################################################
+
+function create_man_page
+{
+
+
+	echo ".\\\" Manpage for ${MAN_PROJECT}." > "${MAN_FILE}"
+	echo ".TH man 1 \"$(date +"%d %B %Y")\" \"${MAN_VERSION}\" \"${MAN_PROJECT} man page\"" >> "${MAN_FILE}"
+	echo '.SH NAME' >> "${MAN_FILE}"
+	echo "${MAN_COMMAND} \- ${MAN_DESCRIPTION}" >> "${MAN_FILE}"
+	echo '.SH SYNOPSIS' >> "${MAN_FILE}"
+	echo "${MAN_COMMAND} [options]">> "${MAN_FILE}"
+	echo '.SH DESCRIPTION' >> "${MAN_FILE}"
+	echo "${MAN_DESCRIPTION_FULL}">> "${MAN_FILE}"
+
+	typeset CATEGORY_PREV=""
+	for int_index in "${!LIST_PARAM_ITEM[@]}"; do
+		typeset index=${LIST_PARAM_ITEM[${int_index}]}
+
+		typeset CATEGORY=$(get_item_from_list "${index}" "CATEGORY")
+
+		if [ ! "${CATEGORY_PREV}" == "${CATEGORY}" ]
+		then
+			echo ".SH ${CATEGORY} :" | tr '[:lower:]' '[:upper:]' >> "${MAN_FILE}"
+			echo ".br"  >> "${MAN_FILE}"
+
+			CATEGORY_PREV=${CATEGORY}
+		fi
+
+
+		echo '.TP'>> "${MAN_FILE}"
+		typeset TYPE=$(get_item_from_list "${index}" "TYPE")
+		typeset HELP=$(get_item_from_list "${index}" "HELP")
+		typeset NEED_VALUE=$(get_item_from_list "${index}" "NEED_VALUE")
+		typeset MANDATORY=$(get_item_from_list "${index}" "MANDATORY")
+		typeset PARAM_NAME_ALT=$(get_item_from_list "${index}" "S_ALT")
+		[[ ! -z ${PARAM_NAME_ALT} ]] && PARAM_NAME_ALT="${PARAM_NAME_ALT}, "
+
+		[ "${NEED_VALUE}" == "y" ] &&  echo ".B ${PARAM_NAME_ALT}${index}=<${TYPE}>" >> "${MAN_FILE}" || echo ".B ${PARAM_NAME_ALT}${index}" >> "${MAN_FILE}"
+		if [[ ${MANDATORY} == "y" ]]
+		then 
+			MANDATORY="yes"
+		elif [[ ${MANDATORY} == "n" ]]
+		then
+			MANDATORY="no"
+		fi
+		echo -e "\nMandatory : ${MANDATORY}"  >> "${MAN_FILE}"
+		echo -e "\n$HELP" | sed "0,/ $(repeat_item 4 "${column_delimiter} ")/s/ $(repeat_item 4 "${column_delimiter} ")/\n.br\n/g" | sed "s/$(repeat_item 4 "${column_delimiter} ")/.br\n/g" | sed "s/^[ \t]*//g">> "${MAN_FILE}"
+
+	done
+	if [[ ! -z ${MAN_COPYRIGHT} ]]
+	then
+		echo '.SH COPYRIGHT'>> "${MAN_FILE}"
+		echo -e ".br\n.br\n" >> "${MAN_FILE}"
+		echo -e "${MAN_COPYRIGHT}" | sed "s/^/.br\n/g" >> "${MAN_FILE}"
+	fi
+	gzip -9 "${MAN_FILE}" 
+
+
+
+
+}
+
+########################################################################
+#-- Limit string length to have small help condensed to fit in small terminal
+########################################################################
+
+function reduce_str
+{
+	typeset STR=$1
+	typeset NB=$2
+
+	if [ "${#STR}" -gt "${NB}" ]
+	then
+		echo "${STR:0:10}[...]${STR: -10}"
+	else
+		echo "${STR}"
+	fi
+
+
+}
+
+########################################################################
+#-- Set error message linked to variable used by help
+########################################################################
+
+set_function "set_error" "VAR_NAME;ERROR_MSG;MULTITHREAD"
+function      set_error
+{
+	typeset VAR_NAME=$1
+	typeset ERROR_MSG=$2
+	if [[ ! -z $3 ]]
+	then
+		typeset MULTITHREAD=$3
+	else
+		typeset MULTITHREAD=0
+	fi
+	
+	if [[ "${MULTITHREAD}" == "1" ]] 
+	then
+		echo "LIST_ERROR+=([${VAR_NAME}]=\"${ERROR_MSG}\")" >> "${ERROR_FILE_MT}"
+	else
+		[[ -z ${LIST_ERROR[${VAR_NAME}]} ]] && LIST_ERROR+=([${VAR_NAME}]="${ERROR_MSG}")
+	fi
+
+	return 0
+}
+
+function eval_error
+{
+	while read error
+	do
+		eval "${error}"
+	done < "${ERROR_FILE_MT}"
+	rm "${ERROR_FILE_MT}"
+}
+
+########################################################################
+#-- Check if an error happened
+########################################################################
+
+function is_error
+{
+if [[ ! -z "${!LIST_ERROR[@]}" ]]
+then
+	echo 1
+else
+	echo 0
+fi
+}
+
+########################################################################
+#-- Show all error message
+########################################################################
+
+function show_error_message
+{
+	if [[ ${HELP_COLOR} == "no" ]]
+	then
+		bold=${normal}
+		underline=${normal}
+		red=${normal}
+	fi
+
+
+	if [[ ! -z "${!LIST_ERROR[@]}" ]]
+	then
+		if [ "${HELP_CON}" == "yes" ]
+		then
+			show_line
+		fi
+
+		for index in "${!LIST_ERROR[@]}"; do
+			typeset  STR=${LIST_ERROR[${index}]}
+			echo " ${bold}${underline}/!\\${normal}${bold} ${STR} ${underline}${normal}" 
+		done
+		show_line
+		clean_and_quit
+	fi
+}
+
+########################################################################
+#-- Show mandatory value
+########################################################################
+
+function show_mandatory_message
+{
+        if [[ ${HELP_COLOR} == "no" ]]
+        then
+                bold=${normal}
+                underline=${normal}
+                red=${normal}
+        fi
+
+	TMP_COLUMN_FILE=$(mktemp)
+	add_tmp_file_to_list $TMP_COLUMN_FILE
+
+        if [[ ! -z "${!LIST_ERROR[@]}" ]]
+        then
+                if [ "${HELP_CON}" == "yes" ]
+                then
+                        show_line
+                fi
+
+                for index in "${!LIST_PARAM[@]}"; do
+			typeset PARAMETER=${index}
+			typeset MANDATORY=$(get_item_from_list "${index}" "MANDATORY")
+			if ( [[ ! $MANDATORY == "y" ]] && [[ ! $MANDATORY == "n" ]] )
+			then
+				STR="  ${PARAMETER}${column_delimiter}:${column_delimiter} ${MANDATORY}"
+				echo "${STR}" >> $TMP_COLUMN_FILE
+			fi
+                done
+		if [[ $(cat $TMP_COLUMN_FILE | wc -l) -gt 0 ]] 
+		then
+			echo " Detailed variable condition :"
+			show_line
+			column -t -s "${column_delimiter}" "$TMP_COLUMN_FILE"
+                	show_line
+		fi
+                clean_and_quit
+        fi
+}
+
+
+
+########################################################################
+#-- Set order of column for set_param function
+########################################################################
+
+function set_pattern
+{
+	typeset COUNTER=0
+
+	while [ $# -gt 0 ]
+	do
+		typeset PAR=$1
+		shift
+		COUNTER=$((${COUNTER} + 1))
+		LIST_PATTERN+=([${COUNTER}]="${PAR}")
+	done
+}
+
+########################################################################
+#-- Get column number of pattern
+########################################################################
+
+function get_number_from_pattern
+{
+	typeset RESULT="0"
+	typeset TO_SEARCH=$1
+
+	for index in "${!LIST_PATTERN[@]}"; do
+		[ ${RESULT} == "0" ] && [ "${TO_SEARCH}" == ${LIST_PATTERN[${index}]} ] && RESULT=${index}
+	done
+	echo ${RESULT}
+}
+
+########################################################################
+#-- Get content of item by Switch
+########################################################################
+
+
+function get_item_from_list
+{
+
+	typeset INDEX=$1
+	typeset PATTERN=$2
+	typeset NUM=$(get_number_from_pattern "${PATTERN}")
+	
+	
+
+	[[ $NUM -ne 0 ]] && echo "${LIST_PARAM[${INDEX}]}" | cut -d "${param_delimiter}" -f "${NUM}"
+
+}
+
+########################################################################
+#-- Get content of item by VAR name
+########################################################################
+
+function get_param_from_var
+{
+
+	typeset VAR_NAME=$1
+	#typeset PARAM=""
+	
+	for index in "${!LIST_PARAM[@]}"; do
+		[ "$(get_item_from_list "${index}" "VAR_NAME")" == "${VAR_NAME}" ] &&  echo "$(get_item_from_list "${index}" "SWITCH")" && break
+	done
+
+}
+
+########################################################################
+#-- Get master param from alt switch
+########################################################################
+
+function get_param_master_switch_from_alt
+{
+	echo ${LIST_PARAM_SWITCH_ALT[$1]}
+}
+
+########################################################################
+#-- Set all rules for a switch
+########################################################################
+
+function set_param
+{
+
+	typeset PARAM_NAME=""
+	typeset VAR_NAME=""
+	typeset S_ALT=""
+	typeset MANDATORY=""
+	typeset DEFAULT=""
+
+	typeset STR=""
+	
+	typeset COUNTER=0
+
+	while [ $# -gt 0 ]
+	do
+		COUNTER=$((${COUNTER} + 1))
+		typeset PAR=$1
+
+		shift
+		[[ -z ${LIST_PATTERN[${COUNTER}]} ]] && clean_and_quit 
+		
+		[ ${LIST_PATTERN[${COUNTER}]} == "SWITCH" ] && PARAM_NAME=${PAR}
+		[ ${LIST_PATTERN[${COUNTER}]} == "VAR_NAME" ] && VAR_NAME=${PAR}
+		[ ${LIST_PATTERN[${COUNTER}]} == "DEFAULT" ] && DEFAULT=${PAR}
+		[ ${LIST_PATTERN[${COUNTER}]} == "S_ALT" ] && S_ALT=${PAR}
+
+		STR="${STR}${PAR}${param_delimiter}"
+	done
+
+	[[ ! -z ${S_ALT} ]] && LIST_PARAM_SWITCH_ALT+=([${S_ALT}]="${PARAM_NAME}")
+	LIST_PARAM+=([${PARAM_NAME}]="${STR}")
+	LIST_PARAM_ITEM+=(${PARAM_NAME})
+
+	set_global_variable "${VAR_NAME}" "${DEFAULT}"
+
+}
+
+########################################################################
+#-- Show category in extended help
+########################################################################
+
+function show_category
+{
+	if [[ ${HELP_TYPE} == "ext" ]]
+	then
+		echo -e "uline${bold}$1${normal}$(repeat_item 5 "${column_delimiter} ")${normal}\nuline$(repeat_item 5 "${column_delimiter} ")${normal}\n $(repeat_item 5 "${column_delimiter} ")${normal}\n" >> "${HELP_FILE}"
+	else
+		echo -e " $(repeat_item 5 "${column_delimiter} ")${normal}\nuline $1 :$(repeat_item 5 "${column_delimiter} ")${normal}\n $(repeat_item 5 "${column_delimiter} ")" >> "${HELP_FILE}"
+	fi
+
+	
+}
+
+########################################################################
+#-- Show help
+########################################################################
+
+function show_help
+{
+
+	HELP_FILE=$(mktemp)
+	add_tmp_file_to_list $HELP_FILE
+	typeset HELP_FILE_BUFFER=$(mktemp)
+	add_tmp_file_to_list $HELP_FILE_BUFFER
+	typeset HELP_FILE_SORTED=$(mktemp)
+	add_tmp_file_to_list $HELP_FILE_SORTED
+	typeset HELP_FILE_SORTED_COLOR=$(mktemp)
+	add_tmp_file_to_list $HELP_FILE_SORTED_COLOR
+
+	if [[ ${HELP_COLOR} == "no" ]]
+	then
+		bold=${normal}
+		underline=${normal}
+		red=${normal}
+	fi
+
+
+	echo "Switch${column_delimiter}Condition${column_delimiter}Value${column_delimiter}Type${column_delimiter}Description" > "${HELP_FILE_BUFFER}"
+	echo -e "uline$(repeat_item 5 "${column_delimiter} ")${normal} " >> "${HELP_FILE_BUFFER}"
+	typeset CATEGORY_PREV=""
+
+	for int_index in "${!LIST_PARAM_ITEM[@]}"; do
+
+		typeset index=${LIST_PARAM_ITEM[${int_index}]}
+
+		typeset PAR_CONTENT=$(eval echo "\$$(get_item_from_list "${index}" "VAR_NAME")")
+
+		typeset PARAM_NAME=$(get_item_from_list "${index}" "SWITCH")
+		typeset PARAM_NAME_ALT=$(get_item_from_list "${index}" "S_ALT")
+		typeset VAR_NAME=$(get_item_from_list "${index}" "VAR_NAME")
+
+		typeset MANDATORY=$(get_item_from_list "${index}" "MANDATORY")
+		typeset MANDATORY_STR=${MANDATORY}
+		typeset DEFAULT=$(get_item_from_list "${index}" "DEFAULT")
+		typeset NEED_VALUE=$(get_item_from_list "${index}" "NEED_VALUE")
+		typeset CATEGORY=$(get_item_from_list "${index}" "CATEGORY")
+		typeset TYPE_FULL=$(get_item_from_list "${index}" "TYPE")
+
+		typeset TYPE_EXT=$(echo "${TYPE_FULL}" | awk -F '(' '{ print $2}' | awk -F ')' '{ print $1}')
+		typeset TYPE=$(echo "${TYPE_FULL}" | cut -d '(' -f 1)
+		#typeset IN_OR_OUT=${TYPE_EXT}
+		
+		typeset HELP=$(get_item_from_list "${index}" "HELP")
+
+		if [[ ! -z $2 ]]
+		then
+			typeset HELP_TYPE=$2
+		else
+			typeset HELP_TYPE="base"
+		fi
+
+		if [ "${MANDATORY}" == "y" ]
+		then
+			 MANDATORY_STR="Mandatory"
+		elif [ "${MANDATORY}" == "n" ]
+		then
+			MANDATORY_STR="-"
+		else
+			if [[ ${HELP_TYPE} == "base" ]]
+			then
+				MANDATORY_STR="Variable"
+			else
+				MANDATORY_STR="${MANDATORY}"
+			fi
+		fi
+		[[ -z ${DEFAULT} ]] && DEFAULT="-"
+		[ "${NEED_VALUE}" == "y" ] && PARAM_NAME="${PARAM_NAME}=<val>" || PARAM_NAME="${PARAM_NAME/#--/--[no]}"
+		if [[ ! -z ${PARAM_NAME_ALT} ]]
+		then
+			[ "${NEED_VALUE}" == "y" ] && PARAM_NAME_ALT="${PARAM_NAME_ALT}=<val>"
+			PARAM_NAME_ALT="${PARAM_NAME_ALT}, "
+		fi
+
+		typeset PRETTY_TYPE="Unknown"
+		[ "${TYPE}" == "file" ] && PRETTY_TYPE="File path"
+		[ "${TYPE}" == "dir" ] && PRETTY_TYPE="Directory path"
+		[ "${TYPE}" == "lnk" ] && PRETTY_TYPE="Symlink"
+		[ "${TYPE}" == "int" ] && PRETTY_TYPE="Integer"
+		[ "${TYPE}" == "i_tuple" ] && PRETTY_TYPE="Int or Int tuple"
+		[ "${TYPE}" == "f_tuple" ] && PRETTY_TYPE="Float or float tuple"
+		[ "${TYPE}" == "float" ] && PRETTY_TYPE="Float"
+		[ "${TYPE}" == "mail" ] && PRETTY_TYPE="Email address"
+		[ "${TYPE}" == "str" ] && PRETTY_TYPE="-" #"String"
+		
+		[[ ! -z ${TYPE_EXT} ]] && PRETTY_TYPE_EXT=" [${TYPE_EXT}]" || PRETTY_TYPE_EXT=""
+		[ "${TYPE}" == "file" ] && [[ ! -z ${TYPE_EXT} ]] && [[ ${TYPE_EXT} == *c* ]] && PRETTY_TYPE="New file path" && PRETTY_TYPE_EXT=""
+		[ "${TYPE}" == "dir" ] && [[ ! -z ${TYPE_EXT} ]] && [[ ${TYPE_EXT} == *c* ]] && PRETTY_TYPE="New Directory path" && PRETTY_TYPE_EXT=""
+
+		typeset PRETTY_TYPE_LOW="Unk"
+		[ "${TYPE}" == "file" ] && PRETTY_TYPE_LOW="File"
+		[ "${TYPE}" == "dir" ] && PRETTY_TYPE_LOW="Dir"
+		[ "${TYPE}" == "lnk" ] && PRETTY_TYPE_LOW="Link"
+		[ "${TYPE}" == "int" ] && PRETTY_TYPE_LOW="Int"
+		[ "${TYPE}" == "i_tuple" ] && PRETTY_TYPE_LOW="Int/Tuple"
+		[ "${TYPE}" == "f_tuple" ] && PRETTY_TYPE_LOW="Float/tuple"
+		[ "${TYPE}" == "float" ] && PRETTY_TYPE_LOW="Float"
+		[ "${TYPE}" == "mail" ] && PRETTY_TYPE_LOW="Email"
+		[ "${TYPE}" == "str" ] && PRETTY_TYPE_LOW="-" #"String"
+		
+		[ "${TYPE}" == "file" ] && [[ ! -z ${TYPE_EXT} ]] && [[ ${TYPE_EXT} == *c* ]] && PRETTY_TYPE_LOW="New file" && PRETTY_TYPE_EXT=""
+		[ "${TYPE}" == "dir" ] && [[ ! -z ${TYPE_EXT} ]] && [[ ${TYPE_EXT} == *c* ]] && PRETTY_TYPE_LOW="New dir" && PRETTY_TYPE_EXT=""
+
+		[[ -z ${LIST_ERROR[${VAR_NAME}]} ]] && COLOR=" " || COLOR="R"
+
+		
+
+		[[ -z ${PAR_CONTENT} ]] && PAR_CONTENT="-"
+
+
+		if [ ! "${CATEGORY_PREV}" == "${CATEGORY}" ]
+		then
+			show_category "${CATEGORY}" "${HELP_TYPE}"
+			CATEGORY_PREV="${CATEGORY}"
+		fi
+
+		
+
+		echo -n "$COLOR"  >> "${HELP_FILE}"
+
+		
+
+		if [[ ${HELP_TYPE} == "ext" ]]
+		then
+			typeset EMPTY_LINE_PATTERN=$(repeat_item 4 " ${column_delimiter}")
+			echo -e " ${PARAM_NAME_ALT}${PARAM_NAME}${column_delimiter}${MANDATORY_STR}${column_delimiter}${PAR_CONTENT}${column_delimiter}$PRETTY_TYPE$PRETTY_TYPE_EXT${column_delimiter}$HELP${normal}" | sed "s/^${EMPTY_LINE_PATTERN}[ \t]*/${EMPTY_LINE_PATTERN}/g" >> "${HELP_FILE}"
+			echo -e "uline$(repeat_item 5 "${column_delimiter} ")${normal}\n $(repeat_item 5 "${column_delimiter} ")" >> "${HELP_FILE}"
+			
+		else
+			echo -e "$(echo " ${PARAM_NAME_ALT}${PARAM_NAME}${column_delimiter}${MANDATORY_STR}${column_delimiter}$(reduce_str "${PAR_CONTENT}" 25)${column_delimiter}$PRETTY_TYPE_LOW$PRETTY_TYPE_EXT${column_delimiter}$HELP${normal}" | sed "s/\\\n.*/${normal}/i" )" >> "${HELP_FILE}"
+		fi
+
+	done
+
+	
+
+	cat "${HELP_FILE}" >> "${HELP_FILE_BUFFER}"
+	column -t -s "${column_delimiter}" "${HELP_FILE_BUFFER}" >> "${HELP_FILE_SORTED}"
+	LEN_LINE=$(head -n 1 "${HELP_FILE_SORTED}" | wc -c)-1 ch='-'
+	LEN_LINE=$(cat "${HELP_FILE_SORTED}" | grep -v '[^. ]' | wc -L | cut -d ' ' -f 1) ch=' '
+	LEN_LINE=$(echo "${LEN_LINE}-5" | bc)
+	show_line
+
+	typeset MANPAGENAME=""
+#	[[ ! -z $SCRIPT_NAME ]] && MANPAGENAME=" - Man page : man $SCRIPT_NAME"
+	echo "Syntax : ${GLOBAL_FILE_NAME} [Arguments] [Options]${MANPAGENAME}"
+
+	show_line
+	cat "${HELP_FILE_SORTED}" | sed "/^R/s/\[no\]/${bold}\[no\]${normal}${red}/g" | sed "/^ /s/\[no\]/${bold}\[no\]${normal}/g" |  sed "/^R/s/<val>/${bold}<val>${normal}${red}/g" | sed "/^ /s/<val>/${bold}<val>${normal}/g" | sed "s/^uline/${underline}/g" | sed "s/^R/${red} /g" #| sed "s/$/${normal}/g"
+
+
+	rm -f "${HELP_FILE}"
+	rm -f "${HELP_FILE_BUFFER}"
+	rm -f "${HELP_FILE_SORTED}"
+	rm -f "${HELP_FILE_SORTED_COLOR}"
+
+
+}
+
+########################################################################
+#-- Check if help must be shown
+########################################################################
+
+
+function check_help
+{
+if [ "${HELP_CON}" == "yes" ]
+then
+	show_help
+#	show_error_message
+	show_mandatory_message
+	show_line
+	clean_and_quit
+	
+elif [ "${HELP_EXT}" == "yes" ]
+then
+	show_help "none" "ext"
+	show_line
+	clean_and_quit
+	
+else
+	if [[ ! -z "${!LIST_ERROR[@]}" ]]
+	then
+		show_help
+		show_line
+		show_error_message
+		clean_and_quit
+		
+	fi
+fi
+
+}
+
+########################################################################
+#-- Set user value from command line switch variable regarding set_param function
+########################################################################
+
+function set_user_value
+{
+
+	while [ $# -gt 0 ]
+	do
+		typeset PAR=$1
+		shift
+
+		typeset PAR_NAME=$(echo "${PAR}" | awk -F"=" '{print $1}')
+		typeset PAR_CONTENT=$(echo "${PAR}" | awk -F"=" '{print $2}')
+
+		if [[ ${PAR} == *=* ]]
+		then
+			PAR_CONTENT=$(echo "${PAR}" | cut -d "=" -f 2-)
+		fi
+		
+
+
+
+
+		if [ "${PAR_NAME}" == "--generate_man_page" ] 
+		then
+			if create_man_page
+			then
+				echo "Man page generated : ${MAN_FILE} - use : man ./${MAN_FILE}.gz"
+			else
+				if [ -f "./${MAN_FILE}.gz" ]
+				then
+					echo "Man page NOT generated - use : man ./${MAN_FILE}.gz to read previously created man page"
+				else
+					echo "Man page NOT generated."
+				fi
+				
+			fi
+			clean_and_quit
+			
+		fi 
+
+		if [[ ! ${LIST_PARAM[${PAR_NAME}]} ]] 
+		then
+			PAR_NAME_MASTER=$(get_param_master_switch_from_alt ${PAR_NAME})
+			[[ ! -z ${PAR_NAME_MASTER} ]] && PAR_NAME=${PAR_NAME_MASTER}
+		fi	
+
+
+		typeset VAR_NAME=$(get_item_from_list "${PAR_NAME}" "VAR_NAME")
+		typeset NEED_VALUE=$(get_item_from_list "${PAR_NAME}" "NEED_VALUE")		
+		typeset TYPE=$(get_item_from_list "${PAR_NAME}" "TYPE")
+		
+	
+
+		#Remove unnecessary slashes in path dir
+		[ "${TYPE}c" == "dirc" ] && PAR_CONTENT=$(echo "${PAR_CONTENT}" | sed s#//*#/#g) && PAR_CONTENT=${PAR_CONTENT%/}
+		#Remove unnecessary slashes in path file
+		[ "${TYPE}c" == "filec" ] && PAR_CONTENT=$(echo "${PAR_CONTENT}" | sed s#//*#/#g) && PAR_CONTENT=${PAR_CONTENT%/}
+
+
+		if [[ ! ${LIST_PARAM[${PAR_NAME}]} ]] 
+		then
+
+			typeset PARAM_INVERTED="${PAR_NAME/#--no/--}"
+			VAR_NAME=$(get_item_from_list "${PARAM_INVERTED}" "VAR_NAME")
+			if [[ ! ${LIST_PARAM[${PARAM_INVERTED}]} ]]
+			then
+				set_error "${PAR_NAME}" "${PAR_NAME} .... is not valid option ."
+			else
+				[[ ! -z "${PAR_CONTENT}" ]] && set_error "${VAR_NAME}" "${PAR_NAME}=${PAR_CONTENT} ( should be ${PAR_NAME} ) ."
+
+				set_global_variable "${VAR_NAME}" "no"
+
+			fi
+		else
+			if [ "${NEED_VALUE}" == "y" ]
+			then
+				[[ -z "${PAR_CONTENT}" ]] && set_error "${VAR_NAME}" "${PAR_NAME}=undefined ."
+			
+				set_global_variable "${VAR_NAME}" "${PAR_CONTENT}"
+
+			else
+				[[ ! -z "${PAR_CONTENT}" ]] && set_error "${VAR_NAME}" "${PAR_NAME}=${PAR_CONTENT} ( should be ${PAR_NAME} ) ."
+				set_global_variable "${VAR_NAME}" "yes"
+
+			fi
+		fi
+
+	done
+
+}
+
+########################################################################
+#-- Check if all mandatory switch are set 
+# y for mandatory
+# n for non mandatory
+# or complex function like (--param1 xor (--param2 and --param3))
+########################################################################
+
+
+function check_mandatory
+{
+	for index in "${!LIST_PARAM[@]}"; do
+		check_mandatory_item ${index} "mt" &
+	done
+	for job in $(jobs -p)
+	do
+		wait "${job}"
+	done
+
+}
+
+function check_mandatory_item
+{
+
+	if [[ ! -z $2 ]]
+	then
+		typeset MULTITHREAD=1
+	else
+		typeset MULTITHREAD=0
+	fi
+
+	typeset index=$1
+	typeset index_tmp=""
+	typeset VAR_CONTENT=$(eval echo "\$$(get_item_from_list "${index}" "VAR_NAME")")
+	typeset PARAM_NAME=$(get_item_from_list "${index}" "SWITCH")
+	typeset VAR_NAME=$(get_item_from_list "${index}" "VAR_NAME")
+	typeset MANDATORY=$(get_item_from_list "${index}" "MANDATORY")
+	typeset MANDATORY_STR=""
+	typeset CUR_MANDATORY=""
+	typeset IMSET=""
+#	typeset VAR_NAME_TMP=""
+	typeset VAR_CONTENT_TMP=""
+
+	if [ "${MANDATORY}" == "y" ]
+	then
+		if [[ -z ${VAR_CONTENT} ]]
+		then
+			set_error "${VAR_NAME}" "${PARAM_NAME} not set and mandatory ." "${MULTITHREAD}"
+		fi
+	else
+		if [ ! "${MANDATORY}" == "n" ]
+		then
+			MANDATORY_STR=${MANDATORY}
+
+			MANDATORY="${MANDATORY//xor/!=}"
+			MANDATORY="${MANDATORY//and/\&\&}"
+			MANDATORY="${MANDATORY//or/||}"
+
+			if [[ -z ${VAR_CONTENT} ]]
+			then
+				IMSET="0"
+			else
+				IMSET="1"
+			fi
+
+			CUR_MANDATORY="${MANDATORY//${PARAM_NAME}/${IMSET}}"
+
+			for index_tmp in "${!LIST_PARAM[@]}"; do
+				VAR_CONTENT_TMP=$(eval echo "\$$(get_item_from_list ${index_tmp} "VAR_NAME")")
+
+				
+				if [[ -z ${VAR_CONTENT_TMP} ]]
+				then
+					IMSET="0"
+				else
+					IMSET="1"
+				fi
+				CUR_MANDATORY="${CUR_MANDATORY//${index_tmp}/${IMSET}}"
+			done
+			CUR_MANDATORY=$(echo "(${CUR_MANDATORY})" | bc)
+			if [[ ${CUR_MANDATORY} -eq 0 ]]
+			then
+				set_error "${VAR_NAME}" "${PARAM_NAME} doesn't respect mandatory rules : ${MANDATORY_STR}" "${MULTITHREAD}"
+			fi
+		fi
+	fi
+}
+
+########################################################################
+#-- Check type for 1 item ($1)
+# $2 unset or set to all => check type and subtype
+# $2 set to other => check only type and not subtype
+########################################################################
+
+function check_item
+{
+	if [[ ! -z $3 ]]
+	then
+		typeset MULTITHREAD=1
+	else
+		typeset MULTITHREAD=0
+	fi
+
+	typeset index=$1
+	typeset with_error="all" # Check Type and subtype
+
+	if [ ! -z "$2" ]
+	then
+		with_error="$2" # Don't check subtype
+	fi
+
+	typeset RC=0
+
+	typeset VAR_CONTENT=$(eval echo "\$$(get_item_from_list "${index}" "VAR_NAME")")
+	typeset VAR_NAME=$(get_item_from_list "${index}" "VAR_NAME")
+	typeset PAR_NAME=$(get_item_from_list "${index}" "SWITCH")
+	
+
+	typeset MANDATORY=$(get_item_from_list "${index}" "MANDATORY")
+	typeset TYPE_FULL=$(get_item_from_list "${index}" "TYPE")
+
+	typeset TYPE_EXT=$(echo "${TYPE_FULL}" | awk -F '(' '{ print $2}' | awk -F ')' '{ print $1}')
+	typeset TYPE=$(echo "${TYPE_FULL}" | cut -d '(' -f 1)
+
+	typeset CHECK_TYPE=""
+	typeset CHECK_TYPE1=""
+	typeset CHECK_TYPE2=""
+	typeset arr=""
+	typeset INT1=""
+	typeset INT2=""
+	typeset PERM_FILE_DIR=""
+
+	if [[ ! -z "${VAR_CONTENT}" ]] && [[ ! "${VAR_CONTENT}" == "auto" ]]
+	then
+		case ${TYPE} in
+			file) ( [ ! -f "${VAR_CONTENT}" ] && [[ ! ${TYPE_EXT} == *c* ]] ) && set_error "${VAR_NAME}" "${VAR_CONTENT} is not a file ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+
+
+				if ( [[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *c* ]] && [ ! -f "${VAR_CONTENT}" ] )
+				then
+					touch ${VAR_CONTENT}  || set_error "${VAR_NAME}"  "${VAR_CONTENT} not created ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR})." "${MULTITHREAD}" && RC=1
+				fi
+
+				[[ ${RC} == "0" ]] && PERM_FILE_DIR="$(stat -c "%G:%U %A" "${VAR_CONTENT}" )"
+
+				[[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *r* ]] && [[ ! -r ${VAR_CONTENT} ]] && set_error "${VAR_NAME}"  "${VAR_CONTENT} not readable ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR})." "${MULTITHREAD}" && RC=1
+				[[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *w* ]] && [[ ! -w ${VAR_CONTENT} ]] && set_error "${VAR_NAME}"  "${VAR_CONTENT} not writable ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR} )." "${MULTITHREAD}" && RC=1
+				[[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *x* ]] && [[ ! -x ${VAR_CONTENT} ]] && set_error "${VAR_NAME}"  "${VAR_CONTENT} not executable ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR} )." "${MULTITHREAD}" && RC=1
+			;;
+			dir)    ( [ ! -d "${VAR_CONTENT}" ] && [[ ! ${TYPE_EXT} == *c* ]] ) && set_error "${VAR_NAME}" "${VAR_CONTENT} is not a directory ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+
+				if ( [[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *c* ]] && [ ! -d "${VAR_CONTENT}" ] )
+				then
+					mkdir -p  ${VAR_CONTENT}  || set_error "${VAR_NAME}"  "${VAR_CONTENT} not created ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR} )." "${MULTITHREAD}" && RC=1
+				fi
+
+				[[ ${RC} == "0" ]] && PERM_FILE_DIR="$(stat -c "%G:%U %A" "${VAR_CONTENT}" )"
+
+				[[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *r* ]] && [[ ! -r ${VAR_CONTENT} ]] && set_error "${VAR_NAME}"  "${VAR_CONTENT} not readable ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR} )." "${MULTITHREAD}" && RC=1
+				[[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *w* ]] && [[ ! -w ${VAR_CONTENT} ]] && set_error "${VAR_NAME}"  "${VAR_CONTENT} not writable ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR} )." "${MULTITHREAD}" && RC=1
+				[[ ${RC} == "0" ]] && [[ ${TYPE_EXT} == *x* ]] && [[ ! -x ${VAR_CONTENT} ]] && set_error "${VAR_NAME}"  "${VAR_CONTENT} not executable ( ${index}=${VAR_CONTENT} / ${PERM_FILE_DIR} )." "${MULTITHREAD}" && RC=1
+			;;
+			mail)
+				if echo "${VAR_CONTENT}" | grep -vEq '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$'
+                                then
+                                        set_error "${VAR_NAME}" "${VAR_CONTENT} is not an email address ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}"
+                                        RC=1
+				fi
+			;;
+			int)    if echo "${VAR_CONTENT}" | grep -vEq '^[-+]?[0-9]*$'
+				then
+					set_error "${VAR_NAME}" "${VAR_CONTENT} is not an integer ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}"
+					RC=1
+				else
+
+					if [[ ${with_error} == "all" ]] 
+					then
+
+						arr=$(echo "${TYPE_EXT}" | tr "," "\n")
+						for x in ${arr}
+						do
+
+							CHECK_TYPE=$(echo "${x}" | sed "s/^<=/${VAR_CONTENT}<=/g" | sed "s/^>=/${VAR_CONTENT}>=/g" | sed "s/^</${VAR_CONTENT}</g" | sed "s/^>/${VAR_CONTENT}>/g" )
+							CHECK_TYPE=$(echo "${CHECK_TYPE}" | bc)
+							if [[ ${CHECK_TYPE} -eq 0 ]]
+							then
+								[[ ${with_error} == "all" ]] && set_error "${VAR_NAME}" "${PAR_NAME} is not ${x} ( ${PAR_NAME}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+							fi
+						done
+					fi
+				fi
+			;;
+			float)  if echo "${VAR_CONTENT}" | grep -vEq '^[-+]?[0-9]+\.?[0-9]*$'
+				then
+					set_error "${VAR_NAME}" "${VAR_CONTENT} is not a float number ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}"
+					RC=1
+				else
+					if [[ ${with_error} == "all" ]]
+					then
+						arr=$(echo "${TYPE_EXT}" | tr "," "\n")
+						for x in ${arr}
+						do
+							CHECK_TYPE=$(echo "${x}" | sed "s/^<=/${VAR_CONTENT}<=/g" | sed "s/^>=/${VAR_CONTENT}>=/g" | sed "s/^</${VAR_CONTENT}</g" | sed "s/^>/${VAR_CONTENT}>/g" )
+							CHECK_TYPE=$(echo "${CHECK_TYPE}" | bc)
+							[[ ${CHECK_TYPE} -eq 0 ]] && set_error "${VAR_NAME}" "${PAR_NAME} is not ${x} ( ${PAR_NAME}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+						done
+					fi
+				fi
+			;;
+			i_tuple) if echo "${VAR_CONTENT}" | grep -vEq '^[0-9]+,?[0-9]*$' 
+				 then
+					set_error "${VAR_NAME}" "${VAR_CONTENT} is not a int tuple or int ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}"
+					RC=1
+
+				 else
+
+					if [[ ${with_error} == "all" ]] 
+					then
+						INT1=$(echo "${VAR_CONTENT}" | cut -d ',' -f 1)
+						INT2=$(echo "${VAR_CONTENT}" | cut -d ',' -f 2)
+						arr=$(echo "${TYPE_EXT}" | tr "," "\n")
+						for x in ${arr}
+						do
+
+							CHECK_TYPE1=$(echo "${x}" | sed "s/^<=/${INT1}<=/g" | sed "s/^>=/${INT1}>=/g" | sed "s/^</${INT1}</g" | sed "s/^>/${INT1}>/g" )
+							CHECK_TYPE1=$(echo "${CHECK_TYPE1}" | bc)
+							[[ ${CHECK_TYPE1} -eq 0 ]] && set_error "${VAR_NAME}" "${PAR_NAME} (${INT1}) is not ${x} ( ${PAR_NAME}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+							CHECK_TYPE2=$(echo "${x}" | sed "s/^<=/${INT2}<=/g" | sed "s/^>=/${INT2}>=/g" | sed "s/^</${INT2}</g" | sed "s/^>/${INT2}>/g" )
+							CHECK_TYPE2=$(echo "${CHECK_TYPE2}" | bc)
+							[[ ${CHECK_TYPE2} -eq 0 ]] && set_error "${VAR_NAME}" "${PAR_NAME} (${INT2}) is not ${x} ( ${PAR_NAME}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+						done
+					fi
+
+				fi
+			;;
+			f_tuple) if echo "${VAR_CONTENT}" | grep -vEq '^[-+]?[0-9]+\.?[0-9]?,?[-+]?[0-9]?+\.?[0-9]?*$'
+				 then
+					set_error "${VAR_NAME}" "${VAR_CONTENT} is not a float tuple ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}"
+					RC=1
+				 else
+					if [[ ${with_error} == "all" ]]
+					then
+						INT1=$(echo "${VAR_CONTENT}" | cut -d ',' -f 1)
+						INT2=$(echo "${VAR_CONTENT}" | cut -d ',' -f 2)
+						arr=$(echo "${TYPE_EXT}" | tr "," "\n")
+						for x in ${arr}
+						do
+							CHECK_TYPE1=$(echo "${x}" | sed "s/^<=/${INT1}<=/g" | sed "s/^>=/${INT1}>=/g" | sed "s/^</${INT1}</g" | sed "s/^>/${INT1}>/g" )
+							CHECK_TYPE1=$(echo "${CHECK_TYPE1}" | bc)
+							[[ ${CHECK_TYPE1} -eq 0 ]] && set_error "${VAR_NAME}" "${PAR_NAME} (${INT1}) is not ${x} ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+							CHECK_TYPE2=$(echo "${x}" | sed "s/^<=/${INT2}<=/g" | sed "s/^>=/${INT2}>=/g" | sed "s/^</${INT2}</g" | sed "s/^>/${INT2}>/g" )
+							CHECK_TYPE2=$(echo "${CHECK_TYPE2}" | bc)
+							[[ ${CHECK_TYPE2} -eq 0 ]] && set_error "${VAR_NAME}" "${PAR_NAME} (${INT2}) is not ${x} ( ${index}=${VAR_CONTENT} )." "${MULTITHREAD}" && RC=1
+						done
+					fi
+				fi
+			;;
+			str) #Not checked
+			;;
+			*) set_error "${VAR_NAME}" "Type unknown (${index}[TYPE]=${TYPE})." && RC=1
+		esac
+	fi
+	return ${RC}
+}
+
+########################################################################
+#-- Check only type without subtype for $1 item
+########################################################################
+
+function check_item_without_subtype
+{
+	typeset RC=1
+
+	if check_item "$1" "type_only"
+	then
+		RC=0
+	fi
+	return ${RC}
+}
+
+########################################################################
+#-- Check type for all parameter
+########################################################################
+
+function check_type
+{
+
+	for index in "${!LIST_PARAM[@]}"; do
+		check_item "${index}" "all" "mt" &
+	done
+	for job in $(jobs -p)
+	do
+		wait "${job}"
+	done
+
+}
+
+########################################################################
+#-- Write line
+########################################################################
+
+function show_line
+{
+	if [[ ${HELP_COLOR} == "no" ]]
+	then
+		ch='-'
+	fi
+
+	if [[ ${HELP_COLOR} == "no" ]]
+	then
+		printf '\n'
+		echo -e "${underline}$(repeat_item "${LEN_LINE}" "${ch}")${normal}"
+	else
+		echo -e "${underline}$(repeat_item "${LEN_LINE}" "${ch}")${normal}"
+	fi
+	printf '\n'
+}
+
+########################################################################
+#-- Show user value usefull for debug
+########################################################################
+
+function show_user_value
+{
+
+	typeset USER_VALUE=$(mktemp)
+	add_tmp_file_to_list $USER_VALUE
+	
+	typeset LEN_LINE=$(echo "User variable${column_delimiter}Value" | wc -c)
+
+	show_line
+
+	echo "User variable${column_delimiter}Value" >> "${USER_VALUE}"
+	show_line >> "${USER_VALUE}"
+	echo " ${column_delimiter} " >> "${USER_VALUE}"
+	for index in "${!LIST_PARAM[@]}"; do
+		typeset VAR_NAME=$(get_item_from_list "${index}" "VAR_NAME")
+		echo "${VAR_NAME}${column_delimiter}$(eval echo "\$${VAR_NAME}")">> "${USER_VALUE}"
+	done
+	column -t -s "${column_delimiter}" "${USER_VALUE}"
+
+	show_line
+
+	rm -f "${USER_VALUE}"
+
+}
+
+########################################################################
+#-- Convert relative path to absolute for item with file or dir type
+########################################################################
+
+function normalize_path
+{
+        readlink -m "$1"
+}
+
+function convert_relative_path_to_absolute_path
+{
+
+	for index in "${!LIST_PARAM[@]}"; do
+		typeset VAR_NAME=$(get_item_from_list "${index}" "VAR_NAME")
+		typeset PATH_TO_CHECK=$( eval echo "\$${VAR_NAME}" )
+		typeset TYPE_FULL=$(get_item_from_list "${index}" "TYPE")
+		#typeset TYPE_EXT=$(echo "${TYPE_FULL}" | awk -F '(' '{ print $2}' | awk -F ')' '{ print $1}')
+		typeset TYPE=$(echo "${TYPE_FULL}" | cut -d '(' -f 1)
+		#typeset CURRENT_DIR=$(pwd)
+		#typeset DIR_CLEAN=""
+		#typeset FILE_NAME=""
+
+#		if [ ! "${PATH_TO_CHECK}c" == "c" ]
+#		then
+#			if [ "${TYPE}" == "dir" ] && [[ -d ${GLOBAL_PATH}/${PATH_TO_CHECK} ]] && [[ -r ${GLOBAL_PATH}/${PATH_TO_CHECK} ]] && [[ -x ${GLOBAL_PATH}/${PATH_TO_CHECK} ]]
+#			then
+#				DIR_CLEAN="$( cd "${GLOBAL_PATH}/${PATH_TO_CHECK}"  && pwd )"
+#				[ ! "$(echo "${PATH_TO_CHECK}" | cut -c1)" == "/" ] && set_global_variable "${VAR_NAME}" "${DIR_CLEAN}"
+#			elif [ "${TYPE}" == "file" ] && [[ -f ${PATH_TO_CHECK} ]] && [[ -r ${GLOBAL_PATH}/${PATH_TO_CHECK} ]]
+#			then
+#				DIR_CLEAN="$( cd "$( dirname "${GLOBAL_PATH}/${PATH_TO_CHECK}" )" && pwd )"
+#				FILE_NAME=$(basename "${GLOBAL_PATH}/${PATH_TO_CHECK}")
+#				cd "${CURRENT_DIR}"
+#				[ ! "$(echo "${PATH_TO_CHECK}" | cut -c1)" == "/" ] && set_global_variable "${VAR_NAME}" "${DIR_CLEAN}/${FILE_NAME}"
+#			fi
+#		fi
+
+		if [[ ! -z "${PATH_TO_CHECK}" ]] && ( [ "${TYPE}" == "dir" ] || [ "${TYPE}" == "file" ] )
+                then
+                        PATH_TO_CHECK=$(normalize_path ${PATH_TO_CHECK})
+                        set_global_variable "${VAR_NAME}" "${PATH_TO_CHECK}"
+                fi
+
+	done
+
+}
+
+########################################################################
+#-- Show command line used to run script
+########################################################################
+
+function show_complete_command_line
+{
+	echo Command line :
+	echo "${COMPLETE_COMMAND_LINE}"
+	show_line
+}
+
+#######################################################################
+# End of BSD license.
+#######################################################################
+

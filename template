@@ -1,0 +1,140 @@
+#!/bin/ksh
+
+INSTALL_PATH=$( cd "$( dirname $0 )" && pwd )
+SCRIPT_NAME=$(basename $0)
+COMPLETE_COMMAND_LINE="$0 $@"
+
+. "$INSTALL_PATH/$SCRIPT_NAME.func"
+. "$INSTALL_PATH/$SCRIPT_NAME.getopt"
+
+########################################################################
+#-- Declare variable, parameters, man data and help
+########################################################################
+
+
+set_man_command_name $(basename $0)
+set_man_file "${MAN_COMMAND}.man"
+set_man_project "$MAN_COMMAND"
+set_man_description "Small description."
+set_man_description_full "Long description. "
+set_man_copyright "License line 1\n\
+License line 2.\n"
+
+
+#
+#  Type :
+#
+#  "lnk"       =>  "Symlink"
+
+#  "file"      =>  "File path"
+#  "dir"       =>  "Directory path"
+# Exented type : (rwx) for permission
+
+#  "int"       =>  "Integer"
+#  "float"     =>  "Float"
+#  "i_tuple"   =>  "Integer or Integer tuple"
+#  "f_tuple"   =>  "Float or Float tuple"
+# Exented type : (<0,<=24,>1) for range integer/float
+
+#  "str"    =>  "Everything"
+#
+# Help :
+# Use $(br) for cariadge return extended help show everything, condensed help show first line.
+#
+######### param_name ###### var name #### mandatory ############ default ##### need value ## Type ##########CATEGORY ### help
+
+set_pattern "S_ALT" "SWITCH"        "VAR_NAME"    "MANDATORY"            "DEFAULT"     "NEED_VALUE"  "TYPE"        "CATEGORY"     "HELP"	
+
+########################################################################
+# Cat 1 variables
+########################################################################
+
+set_param   "-a"    "--param1"        "VAR1"           "y"                  ""             "y"      "dir(rx)"       "CAT1"       "line1$(br)\
+																line2.$(br)\
+																line3."
+
+set_param   "-b"    "--param2"        "VAR2"           "y"                  ""             "y"      "dir(rx)"       "CAT1"       "line1$(br)\
+																line2.$(br)\
+																line3."
+
+set_param   ""      "--param3"        "VAR3"           "y"                  ""             "y"      "dir(rx)"       "CAT1"       "line1$(br)\
+																line2.$(br)\
+																line3."
+
+########################################################################
+# Cat 2 variables
+########################################################################
+
+set_param   ""    "--param4"       "VAR4"        "y"                  ""             "y"      "int(>=0,<=24)"       "CAT2"        "line1$(br)\
+																line2.$(br)\
+																line3."
+
+########################################################################
+# Help variables
+########################################################################
+
+set_param   "-h"    "--help"            "HELP_CON"        "n"                  "no"           "n"      "str"           "Help"        "Show Condensed help"
+#set_param   ""    "--help_ext"        "HELP_EXT"        "n"                  "no"           "n"      "str"           "Help"        "Show Extended help"
+#set_param   ""    "--help_color"      "HELP_COLOR"      "n"                  "yes"          "n"      "str"           "Help"        "Show help with color"
+
+
+########################################################################
+#-- Parse input and check mandatory parameters
+########################################################################
+
+set_user_value "$@"
+check_mandatory
+
+########################################################################
+#-- Custom modification/check
+#
+#   Be carefull if you modify variable content regarding another variable
+#   You may need to check type before custom check to avoid error.
+#   You can check type with :
+#
+#     check_item_without_subtype "--param_to_check" && your check/modification
+#
+#   Or :
+#
+#   if check_item_without_subtype "--param_to_check"
+#   then
+#      your check/modification
+#   fi
+#
+########################################################################
+
+
+
+########################################################################
+#-- Check variable content type
+########################################################################
+
+check_type
+
+eval_error
+
+convert_relative_path_to_absolute_path
+
+check_help
+
+########################################################################
+#-- Show user value
+########################################################################
+
+show_error_message
+
+########################################################################
+#-- Show last message before submit
+########################################################################
+
+
+if [ $DEBUG == "yes" ] 
+then
+	show_user_value
+	show_complete_command_line
+fi
+
+########################################################################
+#-- End of script
+########################################################################
+

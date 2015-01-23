@@ -1,4 +1,4 @@
-#!/bin/ksh
+#!/bin/bash
 
 INSTALL_PATH=$( cd "$( dirname $0 )" && pwd )
 SCRIPT_NAME=$(basename $0)
@@ -69,6 +69,10 @@ set_param   ""    "--param4"       "VAR4"        "y"                  ""        
 																line2.$(br)\
 																line3."
 
+set_param  ""     "--debug"        "DEBUG"       "n"                  "no"           "n"      "str"           "Debug"        "Debug mode$(br)\
+                                                                                                                                Use this mode to have more information."
+
+
 ########################################################################
 # Help variables
 ########################################################################
@@ -124,7 +128,7 @@ check_help
 show_error_message
 
 ########################################################################
-#-- Show last message before submit
+#-- Now your code
 ########################################################################
 
 
@@ -133,6 +137,30 @@ then
 	show_user_value
 	show_complete_command_line
 fi
+
+set_function "example_func_1" "VARIABLE1;VARIABLE2"
+function      example_func_1
+{
+	echo $1
+	echo $2
+}
+
+set_function "example_func_2" "VARIABLE3;VARIABLE4"
+function      example_func_2
+{
+
+	eval $(get_function_param $FUNCNAME $@) # Get parameters
+
+
+	echo $VARIABLE3
+	echo $VARIABLE4
+}
+
+example_func_1 "foo" "bar"
+
+show_line
+
+example_func_2 "foo" "bar"
 
 ########################################################################
 #-- End of script

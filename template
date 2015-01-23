@@ -152,8 +152,8 @@ function      example_func_2
 	eval $(get_function_param $FUNCNAME $@) # Get parameters
 
 
-	echo $VARIABLE3
-	echo $VARIABLE4
+	echo "var3 $VARIABLE3"
+	echo "var4 $VARIABLE4"
 }
 
 example_func_1 "foo" "bar"
@@ -161,6 +161,20 @@ example_func_1 "foo" "bar"
 show_line
 
 example_func_2 "foo" "bar"
+
+show_line
+
+call_function "example_func_2"	"VARIABLE3 => foo"\
+				"VARIABLE4 => bar"
+
+show_line
+
+call_function "example_func_2"	"VARIABLE4 => foo"\
+				"VARIABLE3 => bar"
+
+show_line
+
+call_function "example_func_2"	"VARIABLE4 => foo"
 
 ########################################################################
 #-- End of script
